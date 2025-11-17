@@ -1,0 +1,1 @@
+call "%UserProfile%\Miniconda3\condabin\conda.bat" activate C:\Users\orange\Music\rvc\codename-rvc-fork-4-main\env

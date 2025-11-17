@@ -14,7 +14,7 @@ from torch import Tensor
 now_dir = os.getcwd()
 sys.path.append(now_dir)
 
-from rvc.lib.predictors.f0 import CREPE, RMVPE, FCPE
+from rvc.lib.predictors.f0 import CREPE, RMVPE
 
 import logging
 
@@ -240,12 +240,6 @@ class Pipeline:
             )
             f0 = model.get_f0(x, filter_radius=0.03)
             del model
-        elif f0_method == "fcpe":
-            model = FCPE(
-                device=self.device, sample_rate=self.sample_rate, hop_size=self.window
-            )
-            f0 = model.get_f0(x, p_len, filter_radius=0.006, test_time_augmentation=True)
-            del model
         # f0 adjustments
         if f0_autotune is True:
             f0 = self.autotune.autotune_f0(f0, f0_autotune_strength)
@@ -262,45 +256,11 @@ class Pipeline:
         f0_coarse = np.rint(f0_mel).astype(int)
 
         return f0_coarse, f0bak
-
-    def voice_conversion(
-        self,
-        model,
-        net_g,
-        sid,
-        audio0,
-        pitch,
-        pitchf,
-        index,
-        big_npy,
-        index_rate,
-        version,
-        protect,
-        seed,
-    ):
-        """
-        Performs voice conversion on a given audio segment.
-
-        Args:
-            model: The feature extractor model.
-            net_g: The generative model for synthesizing speech.
-            sid: Speaker ID for the target voice.
-            audio0: The input audio segment.
-            pitch: Quantized F0 contour for pitch guidance.
-            pitchf: Original F0 contour for pitch guidance.
-            index: FAISS index for speaker embedding retrieval.
-            big_npy: Speaker embeddings stored in a NumPy array.
-            index_rate: Blending rate for speaker embedding retrieval.
-            version: Model version (Keep to support old models).
-            protect: Protection level for preserving the original pitch.
-            seed: Seed for randomization of noise.
-        """
-
+    
+    def extract_feats(self, model, audio, version):
         with torch.no_grad():
-            pitch_guidance = pitch != None and pitchf != None
-
             # prepare source audio
-            feats = torch.from_numpy(audio0).float()
+            feats = torch.from_numpy(audio).float()
 
             feats = feats.mean(-1) if feats.dim() == 2 else feats
             assert feats.dim() == 1, feats.dim()
@@ -310,9 +270,26 @@ class Pipeline:
             # extract features
             feats = model(feats)["last_hidden_state"]
 
-            feats = (
+            return (
                 model.final_proj(feats[0]).unsqueeze(0) if version == "v1" else feats
             )
+    
+    def convert_voice(
+        self,
+        feats,
+        net_g,
+        sid,
+        audio0,
+        pitch,
+        pitchf,
+        index,
+        big_npy,
+        index_rate,
+        protect,
+        seed,
+    ):
+        with torch.no_grad():
+            pitch_guidance = pitch != None and pitchf != None
 
             # make a copy for pitch guidance and protection
             feats0 = feats.clone() if pitch_guidance else None
@@ -359,6 +336,54 @@ class Pipeline:
             del feats, feats0, p_len
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+        return audio1
+
+    def voice_conversion(
+        self,
+        model,
+        net_g,
+        sid,
+        audio0,
+        pitch,
+        pitchf,
+        index,
+        big_npy,
+        index_rate,
+        version,
+        protect,
+        seed,
+    ):
+        """
+        Performs voice conversion on a given audio segment.
+
+        Args:
+            model: The feature extractor model.
+            net_g: The generative model for synthesizing speech.
+            sid: Speaker ID for the target voice.
+            audio0: The input audio segment.
+            pitch: Quantized F0 contour for pitch guidance.
+            pitchf: Original F0 contour for pitch guidance.
+            index: FAISS index for speaker embedding retrieval.
+            big_npy: Speaker embeddings stored in a NumPy array.
+            index_rate: Blending rate for speaker embedding retrieval.
+            version: Model version (Keep to support old models).
+            protect: Protection level for preserving the original pitch.
+            seed: Seed for randomization of noise.
+        """
+        feats = self.extract_feats(model, audio0, version)
+        audio1 = self.convert_voice(
+            feats,
+            net_g,
+            sid,
+            audio0,
+            pitch,
+            pitchf,
+            index,
+            big_npy,
+            index_rate,
+            protect,
+            seed
+        )
         return audio1
 
     def _retrieve_speaker_embeddings(self, feats, index, big_npy, index_rate):
@@ -435,10 +460,9 @@ class Pipeline:
             except Exception as error:
                 print(f"An error occurred reading the FAISS index: {error}")
                 index = big_npy = None
-
+                
         audio = signal.filtfilt(bh, ah, audio)
         audio_pad = np.pad(audio, (self.window // 2, self.window // 2), mode="reflect")
-
 
         opt_ts = []
         if audio_pad.shape[0] > self.t_max:
