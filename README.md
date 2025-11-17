@@ -1,3 +1,25 @@
+## About this fork
+
+I just wanted to store this proof of concept of pronunciation editing using analogy vectors. Of course, since this is RVC, it's not going to work miracles on untrained languages, but it'll help in making more understandable/natural covers especially with monolingual vocal synthesizers.
+
+## Demo:
+
+Original RVC output:
+
+https://github.com/user-attachments/assets/21b79621-8af0-44d9-bd75-82213265d5b2
+
+
+
+Edited RVC output with an English /ɑ/-/iː/ analogy applied to the whole thing, resulting in less open and more palatal pronunciation:
+
+https://github.com/user-attachments/assets/81fa43c8-b6a9-4e8f-bc12-2514e40a2a00
+
+## How to use
+
+Run `run-install.bat`, then activate the env with `conda-env.bat` and run `jupyter notebook`. Open `encoder_analogy_editor.ipynb` and edit your inputs in the third cell. Run everything in the **Setup** section. Use the color strip and boundary detection visualizations to find the start and end frames you'd like to convert (you can edit the "pen" value in the first cell of **Boundary Detection** to change its sensitivity with lower values = more sensitive), and edit the left_idx and right_idx in the end of the **Analogies** section. Finally, run **Output** to convert the edited features.
+
+----
+
 # <p align="center">` Codename-RVC-Fork 🍇 4 ` </p>
 ## <p align="center">Based on Applio</p>
 
