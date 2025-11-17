@@ -98,6 +98,9 @@ uv pip install --upgrade setuptools || goto :error
 uv pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --upgrade --index-url https://download.pytorch.org/whl/cu128 || goto :error
 uv pip install -r "%INSTALL_DIR%\requirements.txt" || goto :error
 
+echo Installing jupyter...
+call "%MINICONDA_DIR%\condabin\conda.bat" install jupyter
+
 call "%MINICONDA_DIR%\condabin\conda.bat" deactivate
 echo Dependencies installation complete.
 echo.
